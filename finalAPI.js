@@ -5,21 +5,49 @@ dotenv.config()
 const {PORT, DB_PASSWORD, DB_USER} = process.env;
 const app = express() 
 
-const dbURL = `mongodb+srv://${DB_USER}:${DB_PASSWORD}@cluster0.s8uvz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
+const encodedPassword = encodeURIComponent(DB_PASSWORD);
+
+const dbURL = `mongodb+srv://${DB_USER}:${encodedPassword}@cluster0.s8uvz.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`
 
 mongoose.connect(dbURL).then(function(connection){
-    console.log(connection)
+    console.log("connection success")
 })
 
+const userSchemaRules = {
+    // yet need to add rules
+    name: {
+        type: String,
+        required: true
+    },
+    email: {
+        type: String,
+        required: true,
+        unique: true
+    },
+    password: {
+        type: String,
+        required: true,
+        minlength: 8
+    },
+    conformPassword: {
+        type: String,
+        required: true,
+        minlength: 8,
+        validate: function(){
+            return this.password === this.conformPassword;
+        }
+    },
+    createdAt: {
+        type: Date,
+        default: Date.now
+    }
 
 
+}
 
-
-
-
-
-
-
+const userSchema = new mongoose.Schema(userSchemaRules)
+// this model will have queries/ syntaxes 
+const UserModel = mongoose.model("UserModel", userSchema)
 
 
 app.use(express.json());// to get data from user
@@ -50,19 +78,28 @@ app.get("/api/user/:userId",getUserById)
 
 /* Handler Functions    */
 
-function createUserHandler(req,res){
-    const userDetails = req.body;
-
-    res.status(200).json({
-        status:"success",
-        message:"got response from post method"
-    })
+async function createUserHandler(req,res){
+    try{
+        const userDetails = req.body;
+        //Adding User to DB
+        const user = await UserModel.create(userDetails)   
+        res.status(200).json({
+            status:"success",
+            message:`added the user`,
+            user,
+        })     
+    }catch(err){
+        res.status(500).json({
+            status:"failure",
+            message:err.message
+        })
+    }
 }
 
-function getUserById(req,res){
+async function getUserById(req,res){
     try{
         const userId = req.params.userId;
-    const userDetails = getUserByid(userId);
+    const userDetails = await UserModel.findById(userId);
     if(userDetails == "no user found"){
         throw new Error(`user with ${userId} not found`)
     }else{
@@ -79,10 +116,10 @@ function getUserById(req,res){
     }
 }
 
-function getAllUsers(req,res){
+async function getAllUsers(req,res){
     try{
      console.log("I am inside get method");
- 
+     const userDataStore = await UserModel.find()
      if(userDataStore.length == 0){
          throw new Error("No Users Found");
      }
@@ -116,9 +153,6 @@ app.use(function(req,res){
         message:"404 Page Not Found"
     })
 })
-
-
-
 
 
 app.listen(PORT, function(req, res){
